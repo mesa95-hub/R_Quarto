@@ -1,0 +1,682 @@
+---
+title: "SEM analysis - project Greenwashing"
+author: Cappella MT - 
+date: 29.05.2025
+theme: default
+format:
+  html:
+    code-fold: true
+    code_folding: hide
+    code-tools: true
+    code-link: true
+    toc: true
+    toc-depth: 1
+    toc-location: left
+    page-layout: full
+    df-print: paged
+execute:
+  error: true
+  warning: true
+self-contained: true
+editor_options: 
+  chunk_output_type: console
+---
+
+Analysis for paper2
+
+# Setup
+
+::::::::::::::: panel-tabset
+## Set Working Directory
+```{r}
+#| label: Set-working-directory
+#| echo: true
+#| eval: true
+#| warning: false
+#| code-fold: true
+#| output: false
+setwd("/Users/mariateresa/Downloads/SEM_code_GW_html")
+#save.image(file="Sam-Log&Management.RData")
+load(file="/Users/mariateresa/Downloads/SEM_code_GW_html/Workspace-SEM.RData")
+source("cfanew.R")
+
+```
+
+## Required Packages
+```{r}
+#| label: Required Packages
+#| echo: true
+#| eval: true
+#| warning: false
+#| code-fold: true
+#| output: false
+library(readr)
+library(here)
+library(dplyr)  # to recode nominal variables
+library(corrplot)
+library(cSEM)
+library(lavaan)
+library(psych)
+library(semPlot)
+library(semTools)
+library(sjPlot)
+library(pander) 
+library("report") # the report() function allows to report test results in a more readable way—but it also interprets results for you.
+library(stargazer)
+library(graph4lg) # to order the column of a data set
+library(gdata) # per obtain a full matrix from a low-triangular
+library(table1) # for categorical data descriptive
+library(fastDummies) # for creating dummy var
+#library(purrr) # to replace for loops with walk()
+library(gt) # for creating tables
+library(htmltools) # htmltools::tagList() to obatin tables in collapsible panels
+library(readxl)
+```
+
+# Data
+:::: panel-tabset
+## Import Data (Simulate data)
+```{r,}
+#| label: Simulate questionnaire + BWS data 
+#| echo: true
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: false
+
+dati<-read_xlsx("questionnaire_dataset_simulation.xlsx")
+head(dati)
+dim(dati)
+complete.cases(dati) # check if there are missing data
+summary(dati)
+#| label: Data dimensions
+n <- nrow(dati)
+p <- ncol(dati)
+```
+::: callout-note
+Simulate data
+:::
+
+##Variables selection
+```{r}
+#| label: Variables selection
+#| echo: true
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: false
+rm(n,p) # from previous chunk
+# select the variables to be used in the SEM
+
+selected.dati <- dati[, c(
+  # Demografiche
+   "gender", "age", "area", "family_size", "education", "job", "work_environment", "INC_1", "INC_2", "INC_3",
+  paste0("GW_1_", 1:5),
+  paste0("GW_2_", 1:5),
+  paste0("GPI_1_", 1:3),
+  paste0("GPI_2_", 1:3),
+  paste0("INV_", 1:3),
+  paste0("SKP_", 1:3),
+  paste0("ENVKNW_", 1:6)
+)]
+dim(selected.dati) 
+
+```
+
+## Manifest variables and latent constructs 
+```{r}
+#| label: Measurement model specification
+#| echo: true
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: false
+
+#Manifest variables and latent for Coffee 1 
+MV_lists_1 <- list(
+  GW_1 = paste0("GW_1_", 1:5),
+  GPI_1 = paste0("GPI_1_", 1:3),
+  ENVINV = paste0("INV_", 1:3),
+  GCS = paste0("SKP_", 1:3),
+  ENVK = paste0("ENVKNW_", 1:6)
+)
+
+#Manifest variables and latent for Coffee 2 
+MV_lists_2 <- list(
+  GW_2 = paste0("GW_2_", 1:5),
+  GPI_2 = paste0("GPI_2_", 1:3),
+  INV = paste0("INV_", 1:3),  # invariato, livello between
+  SKP = paste0("SKP_", 1:3),  # invariato
+  ENVKNW = paste0("ENVKNW_", 1:6)  # invariato
+)
+
+#measurement model - level 1 (within)
+cfasyntaxlist_1 <- list(
+  # Coffee 1
+  'GW_1 =~ GW_1_1 + GW_1_2 + GW_1_3 + GW_1_4 + GW_1_5',
+  'GPI_1 =~ GPI_1_1 + GPI_1_2 + GPI_1_3',
+  'INV =~ INV_1 + INV_2 + INV_3',
+  'SKP =~ SKP_1 + SKP_2 + SKP_3',
+  'ENVKNW =~ ENVKNW_1 + ENVKNW_2 + ENVKNW_3 + ENVKNW_4 + ENVKNW_5 + ENVKNW_6'
+)
+
+#general variables - level 2 (between)
+
+cfasyntaxlist_2 <- list(
+  'GW_2 =~ GW_2_1 + GW_2_2 + GW_2_3 + GW_2_4 + GW_2_5',
+  'GPI_2 =~ GPI_2_1 + GPI_2_2 + GPI_2_3',
+  'INV =~ INV_1 + INV_2 + INV_3',
+  'SKP =~ SKP_1 + SKP_2 + SKP_3',
+  'ENVKNW =~ ENVKNW_1 + ENVKNW_2 + ENVKNW_3 + ENVKNW_4 + ENVKNW_5 + ENVKNW_6'
+)
+
+```
+::::
+
+# Uni and Bivariate Stat
+:::: panel-tabset
+## Descriptives
+```{r}
+#| label: Descriptive Stat
+#| echo: true
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: true
+
+# for quant var
+#sem_descriptives(selected.dati[,-c(1:7)]) # remove demo var
+library(psych)
+psych::describe(selected.dati[, 8:ncol(selected.dati)])
+# for categorical var
+table1::table1(~ ., data = selected.dati[, 1:7],
+               na.rm = TRUE, digits = 1, format.number = TRUE)
+
+```
+
+## Correlation Matrix
+```{r}
+#| label: Correlation Matrix
+#| echo: true
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: true
+
+tab_corr(selected.dati[,-c(1:10)], na.deletion = "pairwise", digits = 2, triangle = "lower")
+corrplot(cor(selected.dati[,-c(1:10)]),method="ellips",type="lower",tl.cex=0.4)
+```
+
+
+## Skew and Mardia tests
+```{r}
+#| label: Mardia tests
+#| echo: false
+#| eval: true
+#| warning: true
+#| message: true
+#| code-fold: true
+#| output: true
+
+# Interpretation:
+# The zero value of skewness shows that the data follow normal distribution and any
+# symmetric data should have skewness near zero. Positive value of skewness indicates that the
+# tail on the right side is longer than the left side and vice versa
+
+# mardiaSkew()
+# If the test statistic is significant, e.g. the p-value< 05, the joint distribution of the set of p variables has significant skewnes
+# data are skewed --> use a discrepancy function adapted to non-normality (e.g. MLMV or MLM)
+# maximum likelihood estimation with robust standard errors and a Satorra-Bentler scaled test statistic provides an estimator that is robust to non-normality
+# REF: Satorra A, Bentler PM. Corrections to test statistics and standard errors in covariance structure analysis. 1994
+# REF to MLMV use --> Maydeu-Olivares, A. (2017). Maximum likelihood estimation of structural equation models for continuous data: Standard errors and goodness of fit. Structural Equation Modeling: A Multidisciplinary Journal, 24(3), 383-394.
+# testo da usare "We followed Finney and Distefano’s (2006) recommendation and conducted all the analyses with robust maximum likelihood (RML) and Satorra-Bentler corrected standard errors (Satorra & Bentler, 1994). RML adjusts the chi-square (resulting in the Satorra-Bentler corrected chi-square; SBchi-square) for its upward bias in the case of nonnormally distributed data."
+# altro testo che puo essere modificato e usato "Furthermore, the product indicators are nonnormally distributed. As can be seen in Table 1, both intention indicators and all of the product indicators display a significant skewness to the left side of the distribution"
+#
+# We found that robust SEs computed using the expected information matrix coupled with a mean- and variance-adjusted LR test statistic (i.e., MLMV) is the optimal choice, even with normally distributed data, as it yielded the best combination of accurate SEs and Type I errors.
+#
+
+# test for MVs in the Model
+mardiaSkew(selected.dati[,-c(1:10)])
+```
+::: callout-warning
+Random sample - Fake normality
+:::
+::::
+
+
+# CFAs results
+:::: panel-tabset
+## Correlation structure for each scale
+```{r}
+#| label: CFAs
+#| echo: true
+#| eval: false
+#| message: true
+#| warning: true
+#| code-fold: true
+#| output: true
+
+#RUN CFA and reliability analysis for each scale
+res.CFA <- CFA_rel_analysisV2(MV_lists = MV_lists_1, cfa.models = cfasyntaxlist_1, dati = selected.dati, estimator.used = "MLMV")
+#DATI TROPPO CASUALI --> NON FUNZIONA AL MOMENTO 
+#PTOVA CON ENVKNW 
+fit_test <- cfa(cfasyntaxlist_1[[5]], selected.dati, estimator="MLMV")
+summary(fit_test, fit.measures=TRUE)
+```
+
+## Reliability
+```{r}
+#| label: Reliability
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: true
+#| code-fold: true
+#| output: true
+print(res.CFA$reliability.table)
+reliability_table_1 <- data.frame(
+  Construct = names(cfa_results_1),
+  Alpha = sapply(cfa_results_1, function(x) round(x$alpha, 3))
+)
+print(reliability_table_1)
+
+reliability_table_2 <- data.frame(
+  Construct = names(cfa_results_2),
+  Alpha = sapply(cfa_results_2, function(x) round(x$alpha, 3))
+)
+print(reliability_table_2)
+
+```
+
+## Full Output
+::: panel-tabset
+### Summary
+```{r}
+#| label: CFA outputs 1
+#| eval: false
+#| echo: false
+#| message: true
+#| warning: false
+#| code-fold: true
+#| include: false
+#| output: true
+#for (k in 1:length(MV_lists)){
+  #print("------------------------------------------------------------------------------")
+  #print (paste("Full results - CFA - ",names(MV_lists)[k]))
+  #print("------------------------------------------------------------------------------")
+  #print(summary(res.CFA$results.CFA[[k]], fit.measures = TRUE, standardized = TRUE))
+#}
+#rm(k)
+for (k in names(cfa_results_1)) {
+  cat("------------------------------------------------------------------------------\n")
+  cat(paste("Full results - CFA -", k), "\n")
+  cat("------------------------------------------------------------------------------\n")
+  print(cfa_results_1[[k]]$summary)
+}
+
+for (k in names(cfa_results_1)) {
+  cat("------------------------------------------------------------------------------\n")
+  cat(paste("Full results - CFA -", k), "\n")
+  cat("------------------------------------------------------------------------------\n")
+  print(cfa_results_1[[k]]$summary)
+}
+
+
+
+
+```
+
+### Parameter Estimates
+
+```{r}
+#| label: CFA outputs 2
+#| eval: false
+#| echo: false
+#| message: true
+#| warning: false
+#| code-fold: true
+#| include: false
+#| output: true
+for (k in 1:length(MV_lists)){
+  print("------------------------------------------------------------------------------")
+  print (paste("Parameter Estimates CFA - ",names(MV_lists)[k]))
+  print("------------------------------------------------------------------------------")
+  print(standardizedSolution(res.CFA$results.CFA[[k]]))
+}
+rm(k)
+```
+
+### Modification Indices
+
+```{r}
+#| label: CFA outputs 3
+#| eval: false
+#| echo: false
+#| message: true
+#| warning: false
+#| code-fold: true
+#| include: false
+#| output: true
+for (k in 1:length(MV_lists)){
+  print("------------------------------------------------------------------------------")
+  print (paste("modification Indices CFA - ",names(MV_lists)[k]))
+  print("------------------------------------------------------------------------------")
+  print(modificationIndices(res.CFA$results.CFA[[k]], sort. = TRUE, minimum.value = 3))
+}
+rm(k)
+```
+:::
+::::
+
+
+# SEM results
+
+<!--  picture of the model-->
+
+![](model1.png){width="60%"}
+
+<!--  model specification -->
+
+```{r}
+#| label: SEM model 1 specification
+#| echo: false
+#| eval: true
+#| warning: false
+#| message: true
+#| code-fold: true
+#| output: true
+SEM.model <- '
+  # measurement model
+    ENVINV =~ INV_1 + INV_2 + INV_3
+    SKP =~ SKP_1 + SKP_2 + SKP_3
+    ENVKNW =~ ENVKNW_1 + ENVKNW_2 + ENVKNW_3 + ENVKNW_4 + ENVKNW_5 + ENVKNW_6
+
+    GW_1 =~ GW_1_1 + GW_1_2 + GW_1_3 + GW_1_4 + GW_1_5
+    GW_2 =~ GW_2_1 + GW_2_2 + GW_2_3 + GW_2_4 + GW_2_5
+
+    GPI_1 =~ GPI_1_1 + GPI_1_2 + GPI_1_3
+    GPI_2 =~ GPI_2_1 + GPI_2_2 + GPI_2_3
+
+  # structural model for product 1
+    GW_1 ~ H1*ENVINV + H2*SKP + H3*ENVKNW
+    GPI_1 ~ H4*GW_1
+
+  # structural model for product 2
+    GW_2 ~ H1*ENVINV + H2*SKP + H3*ENVKNW
+    GPI_2 ~ H4*GW_2
+
+  # indirect effects (mediation of GW on GPI)
+    indirect_H1 := H1*H4
+    indirect_H2 := H2*H4
+    indirect_H3 := H3*H4
+
+    # total effects
+    total_GPI_1 := indirect_H1 + indirect_H2 + indirect_H3
+    total_GPI_2 := indirect_H1 + indirect_H2 + indirect_H3
+
+    # proportion mediated (opzionale, se vuoi la % di ciascun effetto indiretto)
+    propMed_H1 := indirect_H1 / total_GPI_1 * 100
+    propMed_H2 := indirect_H2 / total_GPI_1 * 100
+    propMed_H3 := indirect_H3 / total_GPI_1 * 100
+'
+```
+
+<!--  model estimation -->
+
+```{r}
+#| label: SEM model 1 estimation
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: true
+#| code-fold: true
+#| output: true
+
+fit <- sem(SEM.model, data = selected.dati,std.lv = F,estimator="MLMV") 
+#summary (fit, ci=T,fit.measures = TRUE,rsquare=T)
+#fitMeasures(fit,c("chisq.scaled","df","pvalue.scaled", "cfi.robust","rmsea.robust","rmsea.ci.lower.robust","rmsea.ci.upper.robust","rmsea.pvalue.robust","rmsea.notclose.pvalue.robust","SRMR"))
+#MyRobustRMSEA.MLMV(fit)
+#
+#fitMeasures(fit,c("chisq","df","rmsea","gfi","cfi","bic","aic"))  # attenzione questo comando riporta i fit index prima della correz per non normalita
+#lavInspect(fit, what = "cor.lv", add.labels = TRUE)
+#lavInspect(fit, what = "resid", add.labels = TRUE)
+#modificationindices(fit, sort.=T)
+#lavaanPlot(model = fit, node_options = list(shape = "box", fontname = "Helvetica"), edge_options = list(color = "grey"), coefs = TRUE, covs = TRUE,stars="regress")
+#parameterEstimates(fit)
+#parameterEstimates(fit)[parameterEstimates(fit)$op == "~",] 
+#parameterEstimates(fit)[parameterEstimates(fit)$op == ":=",] 
+# to get se for the inderect effect with bootstrap we need to change the estimator to ML
+#fit.boot <- sem(SEM.model, data = selected.dati,std.lv = F,estimator="ML",se = "bootstrap")
+#summary (fit.boot, ci=T,fit.measures = TRUE,rsquare=T)
+#parameterEstimates(fit.boot)[parameterEstimates(fit.boot)$op == ":=",] 
+#parameterEstimates(fit.boot, boot.ci.type = "perc")[parameterEstimates(fit.boot)$op == ":=",]
+#
+# to obtain standardized solution use the line --> type = If "std.lv", the standardized estimates are on the variances of the (continuous) latent variables only. 
+#                                                         If "std.all", the standardized estimates are based on both the variances of both (continuous) observed and latent variables. 
+#                                                         If "std.nox", the standardized estimates are based on both the variances of both (continuous) observed and latent variables, but not the variances of exogenous covariates.
+#standardizedSolution(fit,type = "std.all",output="text")
+```
+
+<!--  model results -->
+
+:::::: panel-tabset
+### Model fit
+
+```{r}
+#| label: Model fit - SEM model 1
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+#| results: asis # "Treat whatever comes out of this chunk as raw markdown or HTML — print it as-is."
+   sem_fitmeasures(fit, robust = FALSE, ci_level = 0.9, digits = 3, print = TRUE)
+   sem_sig(fit)
+   
+```
+
+### Structural model results
+
+```{r}
+#| label: Structural - SEM model 1
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+#| results: asis # "Treat whatever comes out of this chunk as raw markdown or HTML — print it as-is."
+  sem_paths(fit, standardized = TRUE, ci_level = 0.95)
+
+# Mediation effect measures
+# • ACME: Average Causal Mediation Effect [total effect - direct effect] --> indirect effect
+# • ADE: Average Direct Effect [total effect - indirect effect] --> direct effect
+# • Total Effect: Direct (ADE) + Indirect (ACME)
+# • Prop. Mediated: Conceptually ACME / Total effect (This tells us how much of the total effect our indirect effect is “explaining”)
+#
+```
+
+::: callout-warning
+Simulated data
+:::
+
+### Measurement model results
+
+```{r}
+#| label: Outer - SEM model 1
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+#| results: asis # "Treat whatever comes out of this chunk as raw markdown or HTML — print it as-is."
+   sem_factorloadings(fit, standardized = TRUE, ci_level = 0.95)
+   #sem_tables(fit, standardized = TRUE, unstandardized = FALSE, robust = F,
+#            ci_level = .95, rmsea_ci_level = .90, digits = 3)
+```
+
+### Discriminant validity
+
+```{r}
+#| label: Discriminant validity - SEM model 1
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+CFA.model <- '
+  GW_1 =~ GW_1_1 + GW_1_2 + GW_1_3 + GW_1_4 + GW_1_5
+  GW_2 =~ GW_2_1 + GW_2_2 + GW_2_3 + GW_2_4 + GW_2_5
+  GPI_1 =~ GPI_1_1 + GPI_1_2 + GPI_1_3
+  GPI_2 =~ GPI_2_1 + GPI_2_2 + GPI_2_3
+  INV =~ INV_1 + INV_2 + INV_3
+  SKP =~ SKP_1 + SKP_2 + SKP_3
+  ENVKNW =~ ENVKNW_1 + ENVKNW_2 + ENVKNW_3 + ENVKNW_4 + ENVKNW_5 + ENVKNW_6
+'
+fit.CFA <- sem(CFA.model, data = selected.dati,std.lv = T,estimator="MLMV")
+#summary (fit.CFA, ci=T,fit.measures = TRUE,rsquare=T)
+#lavInspect(fit.CFA, what = "cor.lv", add.labels = TRUE)
+a <- discriminantValidity(fit.CFA, cutoff = 0.9, merge = FALSE, level = 0.95)
+rownames(a) <- c(paste(a[,1],a[,3],sep="~~"))
+a <- a[,-c(1,2,3)]
+print(round(a[,-c(4:6)],3))
+rm(a)
+# small p-value supports discriminant validity
+# 
+# HTMT non funziona per modelli con second-order LV
+# htmt(SEM.model,data = selected.dati[,-c(1:9)],htmt2=T)
+# 
+# The HTMT tends to be upward biased if the measurement of the latent variables is not tau-equivalent and the correlation between the latent variables approaches 1. 
+# In this case, it may be better to rely on a modified coefficient, the HTMT2 (Henseler, 2021; Roemer, Schuberth, and Henseler, 2021). 
+# The HTMT2 is a consistent estimator of the correlation between latent variables, and it is usually somewhat smaller than the HTMT. 
+# However, it can only be determined if all empirical correlations are positive. 
+#
+# http://www.henseler.com/htmt.html
+#
+# If the HTMT is clearly smaller than one, discriminant validity can be regarded as established. 
+# In many practical situations, a threshold of 0.85 reliably distinguishes between those pairs of latent variables that are discriminant valid and those that are not. 
+# Monte Carlo simulations provide evidence for the HTMT's favorable classification performance (Franke & Sarstedt, 2019; Voorhees, Brady, Calantone & Ramirez, 2016). 
+```
+
+::: callout-warning
+Simulated data
+:::
+
+### Common Method Bias
+
+```{r}
+#| label: CMB - SEM model 1
+#| echo: false
+#| eval: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+# risultati ottenuti sulla matrice di COR corretta per Common Method Variance Bias
+# (computed according to eq 1 from  Malhotra, Kim, and Patil: Common Method Variance in IS Research Management Science 52(12), pp. 1865-1883, 2006)
+#
+# model 1
+Cor.matrix <- cor(selected.dati[, c(
+  paste0("GW_1_", 1:5),
+  paste0("GW_2_", 1:5),
+  paste0("GPI_1_", 1:3),
+  paste0("GPI_2_", 1:3),
+  paste0("INV_", 1:3),
+  paste0("SKP_", 1:3),
+  paste0("ENVKNW_", 1:6)
+)], use = "pairwise.complete.obs")
+#
+a <- min(abs(Cor.matrix))
+#corrplot(Cor.matrix,method="ellips",type="lower")
+#
+CMV_adj_corr<- Cor.matrix + diag(x=a,nrow(Cor.matrix))
+CMV_adj_corr<- CMV_adj_corr/diag(CMV_adj_corr)
+
+# attenzione cambio stimatore perche MLM non funziona...      
+#fit.CMV <- sem(SEM.model,std.lv = F, sample.cov=CMV_adj_corr,sample.nobs=351,estimator="MLM")
+fit.CMV <- sem(SEM.model,std.lv = F, sample.cov=CMV_adj_corr,sample.nobs=nrow(selected.dati),likelihood="wishart")
+#summary (fit.CMV, fit.measures = TRUE,rsquare=T)
+#parameterEstimates(fit.CMV)
+#lavInspect(fit.CMV, what = "cor.lv", add.labels = TRUE)
+sem_paths(fit.CMV, standardized = TRUE, ci_level = 0.95)
+```
+
+::: callout-warning
+Simulated data
+
+:::
+
+```{r}
+#| label: delating elements 3
+#| echo: false
+#| warning: false
+#| message: false
+#| code-fold: true
+#| output: true
+rm(Cor.matrix,a,CMV_adj_corr,fit.CMV,CFA.model,fit.CFA,SEM.model,fit)
+```
+::::::
+
+# Footer
+
+::: panel-tabset
+## Model fit tresholds and notes
+
+Less restrictive critical values (Kline, 2010):
+
+-   $\chi^2/df<5$
+-   $CFI > 0.9$
+-   $TLI > 0.9$
+-   $SRMR < 0.08$
+-   $RMSEA < 0.08$
+
+Kline, Rex B. "Promise and pitfalls of structural equation modeling in gifted research." (2010).
+
+According to [links](https://davidakenny.net/cm/fit.htm) and Satorra-Bentler chi-square statistic (SBchi2) (Satorra & Bentler 2001) - $CFI  > 0.95$\
+- $RMSEA < 0.06$ - $SRMR < 0.08$
+
+We also reported the significance level associated with the null hypothesis of a population $RMSEA < 0.05$ and the $90\%$ confidence interval bounds for the Robust RMSEA value.
+
+For MLMV estimator, the Robust RMSEA and CFI are not calculated, my functionMyRobustRMSEA.MLMV do the job. REF: Chen, F., Curran, P. J., Bollen, K. A., Kirby, J., & Paxton, P. (2008). An Empirical Evaluation of the Use of Fixed Cutoff Points in RMSEA Test Statistic in Structural Equation Models. Sociological Methods & Research, 36(4), 462–494.
+
+[links](https://doi.org/10.1177/0049124108314720) [links](https://www.tandfonline.com/doi/pdf/10.1080/00273171.2018.1455142?casa_token=mzvORQxTLNEAAAAA:_WT-xLbADPaiUZlfM3B3l7ZGXas6mCzBEzqyGwG1yqNyHqxDsjEnRI9j12HiJjjSsNZbrjnmtYKZ)
+
+Power and minimum sample size for RMSEA [links](www.quantpsy.org/rmsea/rmsea.htm)
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+
+## Citations
+
+```{r}
+citations <- lapply(names(sessionInfo()$otherPkgs), citation)
+for (pkg in citations) {
+  if (!is.null(pkg[[1]]$textVersion) && is.character(pkg[[1]]$textVersion)) {
+    cat("------------------------------------------------------------\n")
+    cat(pkg[[1]]$textVersion, "\n")
+  }
+}
+```
+
+## CSS Styling
+
+```{css}
+#| code-fold: false
+
+.tab-content {
+  border-style: none
+}
+```
+:::
+:::::::::::::::
